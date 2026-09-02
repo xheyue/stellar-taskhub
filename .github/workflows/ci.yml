@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  contracts:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Run reputation contract tests
+        run: cargo test -p reputation-contract
+
+      - name: Run task contract tests
+        run: cargo test -p task-contract
+
+      - name: Build Soroban contracts
+        run: cargo build --release --target wasm32v1-none
+
+  frontend:
+    name: Frontend Tests and Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npx vitest run
+
+      - name: Build frontend
+        run: npm run build
