@@ -1,13 +1,22 @@
 #![cfg(test)]
 
 use super::*;
+
 use reputation_contract::{
     ReputationContract,
     ReputationContractClient,
+    ReputationUpdated,
 };
+
 use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env, String,
+    testutils::{
+        Address as _,
+        Events as _,
+    },
+    Address,
+    Env,
+    Event as _,
+    String,
 };
 
 #[test]
@@ -18,14 +27,17 @@ fn creates_task() {
     let reputation_id = env.register(ReputationContract, ());
 
     let task_contract_id = env.register(TaskContract, ());
-    let task_client = TaskContractClient::new(&env, &task_contract_id);
+    let task_client =
+        TaskContractClient::new(&env, &task_contract_id);
 
     task_client.initialize(&reputation_id);
 
     let user = Address::generate(&env);
-    let title = String::from_str(&env, "Build Stellar dApp");
+    let title =
+        String::from_str(&env, "Build Stellar dApp");
 
-    let task_id = task_client.create_task(&user, &title);
+    let task_id =
+        task_client.create_task(&user, &title);
 
     assert_eq!(task_id, 1);
 
@@ -42,21 +54,41 @@ fn completing_task_marks_it_completed() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let reputation_id = env.register(ReputationContract, ());
+    let reputation_id =
+        env.register(ReputationContract, ());
 
-    let task_contract_id = env.register(TaskContract, ());
-    let task_client = TaskContractClient::new(&env, &task_contract_id);
+    let task_contract_id =
+        env.register(TaskContract, ());
+
+    let task_client =
+        TaskContractClient::new(
+            &env,
+            &task_contract_id,
+        );
 
     task_client.initialize(&reputation_id);
 
     let user = Address::generate(&env);
-    let title = String::from_str(&env, "Complete Level 3");
 
-    let task_id = task_client.create_task(&user, &title);
+    let title =
+        String::from_str(
+            &env,
+            "Complete Level 3",
+        );
 
-    task_client.complete_task(&user, &task_id);
+    let task_id =
+        task_client.create_task(
+            &user,
+            &title,
+        );
 
-    let task = task_client.get_task(&task_id);
+    task_client.complete_task(
+        &user,
+        &task_id,
+    );
+
+    let task =
+        task_client.get_task(&task_id);
 
     assert!(task.completed);
 }
@@ -66,33 +98,163 @@ fn completing_task_updates_reputation_contract() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let reputation_id = env.register(ReputationContract, ());
-    let reputation_client =
-        ReputationContractClient::new(&env, &reputation_id);
+    let reputation_id =
+        env.register(ReputationContract, ());
 
-    let task_contract_id = env.register(TaskContract, ());
+    let reputation_client =
+        ReputationContractClient::new(
+            &env,
+            &reputation_id,
+        );
+
+    let task_contract_id =
+        env.register(TaskContract, ());
+
     let task_client =
-        TaskContractClient::new(&env, &task_contract_id);
+        TaskContractClient::new(
+            &env,
+            &task_contract_id,
+        );
 
     task_client.initialize(&reputation_id);
 
     let user = Address::generate(&env);
+
     let title = String::from_str(
         &env,
         "Test inter-contract communication",
     );
 
-    let task_id = task_client.create_task(&user, &title);
+    let task_id =
+        task_client.create_task(
+            &user,
+            &title,
+        );
 
     assert_eq!(
-        reputation_client.get_reputation(&user),
+        reputation_client
+            .get_reputation(&user),
         0
     );
 
-    task_client.complete_task(&user, &task_id);
+    task_client.complete_task(
+        &user,
+        &task_id,
+    );
 
     assert_eq!(
-        reputation_client.get_reputation(&user),
+        reputation_client
+            .get_reputation(&user),
         10
+    );
+}
+
+#[test]
+fn create_task_emits_task_created_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id =
+        env.register(ReputationContract, ());
+
+    let task_contract_id =
+        env.register(TaskContract, ());
+
+    let task_client =
+        TaskContractClient::new(
+            &env,
+            &task_contract_id,
+        );
+
+    task_client.initialize(&reputation_id);
+
+    let user = Address::generate(&env);
+
+    let title =
+        String::from_str(
+            &env,
+            "Event streaming task",
+        );
+
+    let task_id =
+        task_client.create_task(
+            &user,
+            &title,
+        );
+
+    assert_eq!(
+        env.events().all(),
+        [
+            TaskCreated {
+                task_id,
+                creator: user,
+                title,
+            }
+            .to_xdr(
+                &env,
+                &task_contract_id,
+            ),
+        ]
+    );
+}
+
+#[test]
+fn complete_task_emits_cross_contract_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id =
+        env.register(ReputationContract, ());
+
+    let task_contract_id =
+        env.register(TaskContract, ());
+
+    let task_client =
+        TaskContractClient::new(
+            &env,
+            &task_contract_id,
+        );
+
+    task_client.initialize(&reputation_id);
+
+    let user = Address::generate(&env);
+
+    let title =
+        String::from_str(
+            &env,
+            "Complete event test",
+        );
+
+    let task_id =
+        task_client.create_task(
+            &user,
+            &title,
+        );
+
+    task_client.complete_task(
+        &user,
+        &task_id,
+    );
+
+    assert_eq!(
+        env.events().all(),
+        [
+            ReputationUpdated {
+                user: user.clone(),
+                new_score: 10,
+            }
+            .to_xdr(
+                &env,
+                &reputation_id,
+            ),
+            TaskCompleted {
+                task_id,
+                creator: user,
+            }
+            .to_xdr(
+                &env,
+                &task_contract_id,
+            ),
+        ]
     );
 }
