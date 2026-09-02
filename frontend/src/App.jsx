@@ -330,91 +330,88 @@ function App() {
     };
 
   const getEventLabel = (
-    event,
-    index
-  ) => {
-    if (!event) {
-      return `Contract Event ${
-        index + 1
-      }`;
-    }
+  event,
+  index
+) => {
+  if (!event) {
+    return `Contract Event ${index + 1}`;
+  }
 
-    switch (event.name) {
-      case "TaskCreated":
-        return "Task Created";
+  switch (event.name) {
+    case "task_created":
+      return "Task Created";
 
-      case "TaskCompleted":
-        return "Task Completed";
+    case "task_completed":
+      return "Task Completed";
 
-      case "ReputationUpdated":
-        return "Reputation Updated";
+    case "reputation_updated":
+      return "Reputation Updated";
 
-      default:
-        return (
-          event.name ||
-          "Contract Event"
-        );
-    }
-  };
+    default:
+      return (
+        event.name ||
+        "Contract Event"
+      );
+  }
+};
+const getEventDescription = (
+  event
+) => {
+  if (!event) {
+    return "";
+  }
 
-  const getEventDescription = (
-    event
-  ) => {
-    if (!event) {
-      return "";
-    }
+  const topics =
+    event.decodedTopics || [];
 
-    const topics =
-      event.decodedTopics || [];
+  if (
+    event.name ===
+    "task_created"
+  ) {
+    const taskId =
+      topics[1];
+
+    return `Task #${taskId} created`;
+  }
+
+  if (
+    event.name ===
+    "task_completed"
+  ) {
+    const taskId =
+      topics[1];
+
+    return `Task #${taskId} completed`;
+  }
+
+  if (
+    event.name ===
+    "reputation_updated"
+  ) {
+    const value =
+      event.decodedValue;
 
     if (
-      event.name ===
-      "TaskCreated"
+      value &&
+      typeof value === "object"
     ) {
-      const taskId =
-        topics[1];
-
-      return `Task #${taskId} created`;
-    }
-
-    if (
-      event.name ===
-      "TaskCompleted"
-    ) {
-      const taskId =
-        topics[1];
-
-      return `Task #${taskId} completed`;
-    }
-
-    if (
-      event.name ===
-      "ReputationUpdated"
-    ) {
-      const value =
-        event.decodedValue;
+      const score =
+        value.new_score ??
+        value.newScore ??
+        value.score;
 
       if (
-        value &&
-        typeof value === "object"
+        score !== undefined
       ) {
-        const score =
-          value.new_score ??
-          value.newScore ??
-          value.score;
-
-        if (
-          score !== undefined
-        ) {
-          return `Reputation updated to ${score}`;
-        }
+        return `Reputation updated to ${score}`;
       }
-
-      return "Reputation score updated";
     }
 
-    return `Ledger ${event.ledger}`;
-  };
+    return "Reputation score updated";
+  }
+
+  return `Ledger ${event.ledger}`;
+};
 
   return (
     <div className="app-shell">
