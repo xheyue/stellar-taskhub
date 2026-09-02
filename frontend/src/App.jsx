@@ -13,26 +13,83 @@ import {
   getNextTaskId,
 } from "./services/contracts";
 
+import {
+  startEventPolling,
+} from "./services/events";
+
 StellarWalletsKit.init({
   modules: defaultModules(),
 });
 
-StellarWalletsKit.setNetwork(Networks.TESTNET);
+StellarWalletsKit.setNetwork(
+  Networks.TESTNET
+);
 
 function App() {
-  const [walletAddress, setWalletAddress] = useState("");
-  const [walletError, setWalletError] = useState("");
-  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletAddress, setWalletAddress] =
+    useState("");
 
-  const [tasks, setTasks] = useState([]);
-  const [reputation, setReputation] = useState(0);
+  const [walletError, setWalletError] =
+    useState("");
 
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [showNewTask, setShowNewTask] = useState(false);
+  const [walletLoading, setWalletLoading] =
+    useState(false);
 
-  const [contractLoading, setContractLoading] = useState(false);
-  const [contractError, setContractError] = useState("");
-  const [transactionHash, setTransactionHash] = useState("");
+  const [tasks, setTasks] =
+    useState([]);
+
+  const [reputation, setReputation] =
+    useState(0);
+
+  const [newTaskTitle, setNewTaskTitle] =
+    useState("");
+
+  const [showNewTask, setShowNewTask] =
+    useState(false);
+
+  const [contractLoading, setContractLoading] =
+    useState(false);
+
+  const [contractError, setContractError] =
+    useState("");
+
+  const [transactionHash, setTransactionHash] =
+    useState("");
+
+  const [contractEvents, setContractEvents] =
+    useState([]);
+
+  const [
+    eventStreamStatus,
+    setEventStreamStatus,
+  ] = useState("connecting");
+
+  const [
+    eventStreamError,
+    setEventStreamError,
+  ] = useState("");
+
+  const shortenAddress = (address) => {
+    if (!address) {
+      return "";
+    }
+
+    return `${address.slice(
+      0,
+      5
+    )}...${address.slice(-5)}`;
+  };
+
+  const shortenHash = (hash) => {
+    if (!hash) {
+      return "";
+    }
+
+    return `${hash.slice(
+      0,
+      16
+    )}...${hash.slice(-10)}`;
+  };
 
   const connectWallet = async () => {
     try {
@@ -42,12 +99,22 @@ function App() {
       const { address } =
         await StellarWalletsKit.authModal();
 
+      if (!address) {
+        throw new Error(
+          "Wallet connection was cancelled."
+        );
+      }
+
       setWalletAddress(address);
     } catch (error) {
-      console.error("Wallet connection error:", error);
+      console.error(
+        "Wallet connection failed:",
+        error
+      );
 
       setWalletError(
-        "Wallet connection failed. Please try again."
+        error?.message ||
+          "Could not connect wallet."
       );
     } finally {
       setWalletLoading(false);
@@ -58,25 +125,31 @@ function App() {
     try {
       setContractError("");
 
-      const nextTaskId = Number(
-        await getNextTaskId()
-      );
+      const nextTaskId =
+        await getNextTaskId();
 
       const loadedTasks = [];
 
-      for (let id = 1; id < nextTaskId; id++) {
+      for (
+        let taskId = 1;
+        taskId < Number(nextTaskId);
+        taskId++
+      ) {
         try {
-          const task = await getTask(id);
+          const task =
+            await getTask(taskId);
 
           loadedTasks.push({
             id: Number(task.id),
-            title: String(task.title),
             creator: String(task.creator),
-            completed: Boolean(task.completed),
+            title: String(task.title),
+            completed: Boolean(
+              task.completed
+            ),
           });
         } catch (error) {
-          console.error(
-            `Could not load task ${id}:`,
+          console.warn(
+            `Could not load task ${taskId}:`,
             error
           );
         }
@@ -86,20 +159,25 @@ function App() {
 
       if (walletAddress) {
         const score =
-          await getReputation(walletAddress);
+          await getReputation(
+            walletAddress
+          );
 
-        setReputation(Number(score));
+        setReputation(
+          Number(score)
+        );
       } else {
         setReputation(0);
       }
     } catch (error) {
       console.error(
-        "Blockchain loading error:",
+        "Blockchain data loading failed:",
         error
       );
 
       setContractError(
-        "Could not load Stellar contract data."
+        error?.message ||
+          "Could not load blockchain data."
       );
     }
   };
@@ -108,99 +186,200 @@ function App() {
     loadBlockchainData();
   }, [walletAddress]);
 
-  const handleCreateTask = async () => {
-    if (!walletAddress) {
-      setContractError(
-        "Connect your wallet before creating a task."
-      );
-      return;
+  useEffect(() => {
+    const stopPolling =
+      startEventPolling({
+        onEvents: (
+          allEvents,
+          newEvents
+        ) => {
+          setContractEvents(
+            allEvents
+          );
+
+          setEventStreamStatus(
+            "connected"
+          );
+
+          setEventStreamError("");
+
+          if (
+            newEvents.length > 0
+          ) {
+            loadBlockchainData();
+          }
+        },
+
+        onError: (error) => {
+          console.error(
+            "Event stream error:",
+            error
+          );
+
+          setEventStreamStatus(
+            "error"
+          );
+
+          setEventStreamError(
+            error?.message ||
+              "Event stream failed."
+          );
+        },
+
+        interval: 4000,
+      });
+
+    return () => {
+      stopPolling();
+    };
+  }, [walletAddress]);
+
+  const handleCreateTask =
+    async (event) => {
+      event.preventDefault();
+
+      if (!walletAddress) {
+        setContractError(
+          "Connect your wallet first."
+        );
+
+        return;
+      }
+
+      if (!newTaskTitle.trim()) {
+        setContractError(
+          "Enter a task title."
+        );
+
+        return;
+      }
+
+      try {
+        setContractLoading(true);
+        setContractError("");
+        setTransactionHash("");
+
+        const response =
+          await createTask(
+            walletAddress,
+            newTaskTitle
+          );
+
+        setTransactionHash(
+          response.hash
+        );
+
+        setNewTaskTitle("");
+        setShowNewTask(false);
+
+        await loadBlockchainData();
+      } catch (error) {
+        console.error(
+          "Create task failed:",
+          error
+        );
+
+        setContractError(
+          error?.message ||
+            "Could not create task."
+        );
+      } finally {
+        setContractLoading(false);
+      }
+    };
+
+  const handleCompleteTask =
+    async (taskId) => {
+      if (!walletAddress) {
+        setContractError(
+          "Connect your wallet first."
+        );
+
+        return;
+      }
+
+      try {
+        setContractLoading(true);
+        setContractError("");
+        setTransactionHash("");
+
+        const response =
+          await completeTask(
+            walletAddress,
+            taskId
+          );
+
+        setTransactionHash(
+          response.hash
+        );
+
+        await loadBlockchainData();
+      } catch (error) {
+        console.error(
+          "Complete task failed:",
+          error
+        );
+
+        setContractError(
+          error?.message ||
+            "Could not complete task."
+        );
+      } finally {
+        setContractLoading(false);
+      }
+    };
+
+  const getEventLabel = (
+    event,
+    index
+  ) => {
+    if (!event) {
+      return `Contract Event ${
+        index + 1
+      }`;
     }
 
-    if (!newTaskTitle.trim()) {
-      setContractError(
-        "Please enter a task title."
-      );
-      return;
+    if (
+      event.contractId ===
+      import.meta.env
+        .VITE_REPUTATION_CONTRACT_ID
+    ) {
+      return "Reputation Contract Event";
     }
 
-    try {
-      setContractLoading(true);
-      setContractError("");
-      setTransactionHash("");
-
-      const response = await createTask(
-        walletAddress,
-        newTaskTitle
-      );
-
-      setTransactionHash(response.hash);
-      setNewTaskTitle("");
-      setShowNewTask(false);
-
-      await loadBlockchainData();
-    } catch (error) {
-      console.error(
-        "Create task error:",
-        error
-      );
-
-      setContractError(
-        error?.message ||
-          "Task creation failed."
-      );
-    } finally {
-      setContractLoading(false);
-    }
-  };
-
-  const handleCompleteTask = async (taskId) => {
-    if (!walletAddress) {
-      setContractError(
-        "Connect your wallet before completing a task."
-      );
-      return;
+    if (
+      event.contractId ===
+      import.meta.env
+        .VITE_TASK_CONTRACT_ID
+    ) {
+      return "Task Contract Event";
     }
 
-    try {
-      setContractLoading(true);
-      setContractError("");
-      setTransactionHash("");
-
-      const response = await completeTask(
-        walletAddress,
-        taskId
-      );
-
-      setTransactionHash(response.hash);
-
-      await loadBlockchainData();
-    } catch (error) {
-      console.error(
-        "Complete task error:",
-        error
-      );
-
-      setContractError(
-        error?.message ||
-          "Task completion failed."
-      );
-    } finally {
-      setContractLoading(false);
-    }
+    return "Contract Event";
   };
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">
-            STELLAR TESTNET
-          </p>
+        <div className="brand">
+          <div className="brand-mark">
+            S
+          </div>
 
-          <h1>TaskHub</h1>
+          <div>
+            <h1>Stellar TaskHub</h1>
+            <p>
+              On-chain task &
+              reputation system
+            </p>
+          </div>
         </div>
 
-        <div>
+        <div className="wallet-area">
+          <span className="network-pill">
+            ● Testnet
+          </span>
+
           <button
             className="wallet-button"
             onClick={connectWallet}
@@ -209,217 +388,391 @@ function App() {
             {walletLoading
               ? "Connecting..."
               : walletAddress
-                ? `${walletAddress.slice(
-                    0,
-                    5
-                  )}...${walletAddress.slice(
-                    -5
-                  )}`
-                : "Connect Wallet"}
+              ? shortenAddress(
+                  walletAddress
+                )
+              : "Connect Wallet"}
           </button>
-
-          {walletError && (
-            <p className="wallet-error">
-              {walletError}
-            </p>
-          )}
         </div>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            ON-CHAIN PRODUCTIVITY
-          </p>
-
-          <h2>
-            Complete tasks.
-            <br />
-            Build your reputation.
-          </h2>
-
-          <p className="hero-description">
-            Create tasks on Stellar,
-            complete them on-chain,
-            and earn reputation through
-            smart contract interactions.
-          </p>
-        </div>
-
-        <div className="stats-card">
-          <span>Reputation Score</span>
-
-          <strong>{reputation}</strong>
-
-          <small>
-            +10 per completed task
-          </small>
-        </div>
-      </section>
-
-      <section className="dashboard">
-        <div className="section-heading">
+      <main className="dashboard">
+        <section className="hero-section">
           <div>
-            <p className="eyebrow">
-              YOUR WORK
-            </p>
+            <span className="eyebrow">
+              LEVEL 3 • STELLAR
+              SOROBAN
+            </span>
 
-            <h3>Tasks</h3>
+            <h2>
+              Build. Complete.
+              <br />
+              Earn reputation.
+            </h2>
+
+            <p className="hero-copy">
+              Create tasks on Stellar
+              Testnet, complete them
+              on-chain and earn
+              reputation through
+              inter-contract
+              communication.
+            </p>
           </div>
 
-          <button
-            className="primary-button"
-            onClick={() =>
-              setShowNewTask(
-                (current) => !current
-              )
-            }
-          >
-            + New Task
-          </button>
-        </div>
+          <div className="reputation-card">
+            <span className="card-label">
+              Reputation Score
+            </span>
 
-        {showNewTask && (
-          <div className="new-task-form">
-            <input
-              type="text"
-              placeholder="Enter task title..."
-              value={newTaskTitle}
-              onChange={(event) =>
-                setNewTaskTitle(
-                  event.target.value
-                )
-              }
-              disabled={contractLoading}
-            />
+            <strong>
+              {reputation}
+            </strong>
 
-            <button
-              className="primary-button"
-              onClick={handleCreateTask}
-              disabled={contractLoading}
-            >
-              {contractLoading
-                ? "Processing..."
-                : "Create on Stellar"}
-            </button>
+            <span className="card-caption">
+              On-chain reputation
+            </span>
+          </div>
+        </section>
+
+        {walletError && (
+          <div className="error-banner">
+            {walletError}
           </div>
         )}
 
         {contractError && (
-          <p className="wallet-error">
+          <div className="error-banner">
             {contractError}
-          </p>
-        )}
-
-        {transactionHash && (
-          <div className="transaction-status">
-            <strong>
-              Transaction confirmed ✓
-            </strong>
-
-            <p>
-              {transactionHash.slice(0, 16)}
-              ...
-              {transactionHash.slice(-10)}
-            </p>
           </div>
         )}
 
-        <div className="task-grid">
-          {tasks.length === 0 ? (
-            <article className="task-card">
-              <h4>No tasks found</h4>
+        <section className="tasks-section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">
+                TASKS
+              </span>
 
-              <p>
-                Create your first on-chain task.
-              </p>
-            </article>
-          ) : (
-            tasks.map((task) => (
-              <article
-                className="task-card"
-                key={task.id}
+              <h3>
+                Your on-chain tasks
+              </h3>
+            </div>
+
+            <button
+              className="primary-button"
+              onClick={() =>
+                setShowNewTask(
+                  !showNewTask
+                )
+              }
+            >
+              + New Task
+            </button>
+          </div>
+
+          {showNewTask && (
+            <form
+              className="new-task-form"
+              onSubmit={
+                handleCreateTask
+              }
+            >
+              <input
+                type="text"
+                placeholder="What do you want to accomplish?"
+                value={newTaskTitle}
+                onChange={(event) =>
+                  setNewTaskTitle(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  contractLoading
+                }
+              />
+
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={
+                  contractLoading
+                }
               >
-                <div className="task-card-top">
-                  <span
-                    className={`status ${
-                      task.completed
-                        ? "completed"
-                        : "active"
-                    }`}
-                  >
-                    {task.completed
-                      ? "Completed"
-                      : "Active"}
-                  </span>
+                {contractLoading
+                  ? "Waiting for Stellar..."
+                  : "Create on Stellar"}
+              </button>
+            </form>
+          )}
 
-                  <span className="reward">
-                    +10 REP
-                  </span>
-                </div>
+          {contractLoading && (
+            <div className="loading-card">
+              <span className="spinner" />
 
-                <h4>{task.title}</h4>
+              <div>
+                <strong>
+                  Processing
+                  transaction
+                </strong>
 
                 <p>
-                  Task #{task.id}
+                  Confirm the
+                  transaction in your
+                  wallet and wait for
+                  Stellar Testnet.
                 </p>
-
-                <button
-                  className="task-action"
-                  onClick={() =>
-                    handleCompleteTask(
-                      task.id
-                    )
-                  }
-                  disabled={
-                    task.completed ||
-                    contractLoading
-                  }
-                >
-                  {task.completed
-                    ? "Completed"
-                    : contractLoading
-                      ? "Processing..."
-                      : "Complete Task"}
-                </button>
-              </article>
-            ))
+              </div>
+            </div>
           )}
-        </div>
-      </section>
 
-      <section className="activity-panel">
-        <div>
-          <p className="eyebrow">
-            REAL-TIME
-          </p>
+          {transactionHash && (
+            <div className="success-banner">
+              <div>
+                <strong>
+                  Transaction
+                  confirmed ✓
+                </strong>
 
-          <h3>Contract Activity</h3>
-        </div>
+                <p>
+                  {shortenHash(
+                    transactionHash
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
-        <div className="activity-item">
-          <span className="activity-dot" />
+          <div className="task-grid">
+            {tasks.length === 0 ? (
+              <div className="empty-card">
+                <h4>
+                  No tasks yet
+                </h4>
 
-          <div>
-            <strong>
-              Stellar Testnet
-            </strong>
+                <p>
+                  Create your first
+                  task on Stellar
+                  Testnet.
+                </p>
+              </div>
+            ) : (
+              tasks.map((task) => (
+                <article
+                  className={`task-card ${
+                    task.completed
+                      ? "completed"
+                      : ""
+                  }`}
+                  key={task.id}
+                >
+                  <div className="task-top">
+                    <span className="task-number">
+                      Task #{task.id}
+                    </span>
 
-            <p>
-              {transactionHash
-                ? "Latest contract transaction confirmed"
-                : "Waiting for contract activity"}
-            </p>
+                    <span
+                      className={`status-pill ${
+                        task.completed
+                          ? "done"
+                          : "active"
+                      }`}
+                    >
+                      {task.completed
+                        ? "Completed"
+                        : "Active"}
+                    </span>
+                  </div>
+
+                  <h4>
+                    {task.title}
+                  </h4>
+
+                  <p className="creator">
+                    Creator:{" "}
+                    {shortenAddress(
+                      task.creator
+                    )}
+                  </p>
+
+                  {!task.completed &&
+                    walletAddress &&
+                    task.creator ===
+                      walletAddress && (
+                      <button
+                        className="complete-button"
+                        onClick={() =>
+                          handleCompleteTask(
+                            task.id
+                          )
+                        }
+                        disabled={
+                          contractLoading
+                        }
+                      >
+                        Complete Task
+                      </button>
+                    )}
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="activity-section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">
+                REAL-TIME
+              </span>
+
+              <h3>
+                Contract Activity
+              </h3>
+            </div>
+
+            <span
+              className={`stream-status ${eventStreamStatus}`}
+            >
+              {eventStreamStatus ===
+              "connected"
+                ? "● Live"
+                : eventStreamStatus ===
+                  "error"
+                ? "● Error"
+                : "● Connecting"}
+            </span>
           </div>
 
-          <small>
-            {transactionHash
-              ? "just now"
-              : "live"}
-          </small>
-        </div>
-      </section>
-    </main>
+          {eventStreamError && (
+            <div className="error-banner">
+              {eventStreamError}
+            </div>
+          )}
+
+          <div className="activity-list">
+            {contractEvents.length ===
+            0 ? (
+              <div className="activity-item">
+                <div className="activity-dot" />
+
+                <div>
+                  <strong>
+                    Waiting for contract
+                    events
+                  </strong>
+
+                  <p>
+                    Stellar TaskHub
+                    checks Testnet every
+                    4 seconds.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              contractEvents
+                .slice(0, 8)
+                .map(
+                  (
+                    contractEvent,
+                    index
+                  ) => (
+                    <div
+                      className="activity-item"
+                      key={
+                        contractEvent.id ||
+                        `${contractEvent.txHash}-${index}`
+                      }
+                    >
+                      <div className="activity-dot" />
+
+                      <div>
+                        <strong>
+                          {getEventLabel(
+                            contractEvent,
+                            index
+                          )}
+                        </strong>
+
+                        <p>
+                          Ledger{" "}
+                          {
+                            contractEvent.ledger
+                          }
+                          {" • "}
+                          {shortenHash(
+                            contractEvent.txHash
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )
+            )}
+          </div>
+        </section>
+
+        <section className="architecture-section">
+          <span className="eyebrow">
+            ARCHITECTURE
+          </span>
+
+          <h3>
+            Inter-contract
+            communication
+          </h3>
+
+          <div className="architecture-flow">
+            <div className="architecture-box">
+              <strong>
+                React Frontend
+              </strong>
+              <span>
+                Wallet + Stellar SDK
+              </span>
+            </div>
+
+            <span className="flow-arrow">
+              →
+            </span>
+
+            <div className="architecture-box">
+              <strong>
+                Task Contract
+              </strong>
+              <span>
+                Create & complete
+                tasks
+              </span>
+            </div>
+
+            <span className="flow-arrow">
+              →
+            </span>
+
+            <div className="architecture-box">
+              <strong>
+                Reputation Contract
+              </strong>
+              <span>
+                On-chain reputation
+              </span>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>
+          Stellar TaskHub • Soroban
+          Testnet
+        </span>
+
+        <span>
+          Event polling every 4s
+        </span>
+      </footer>
+    </div>
   );
 }
 
