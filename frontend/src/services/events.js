@@ -1,4 +1,7 @@
-import { rpc } from "@stellar/stellar-sdk";
+import {
+  rpc,
+  scValToNative,
+} from "@stellar/stellar-sdk";
 
 const RPC_URL =
   import.meta.env.VITE_STELLAR_RPC_URL ||
@@ -17,6 +20,58 @@ const CONTRACT_IDS = [
   REPUTATION_CONTRACT_ID,
 ].filter(Boolean);
 
+function readEventName(event) {
+  try {
+    if (
+      !event.topic ||
+      event.topic.length === 0
+    ) {
+      return "ContractEvent";
+    }
+
+    return String(
+      scValToNative(event.topic[0])
+    );
+  } catch (error) {
+    console.warn(
+      "Could not decode event name:",
+      error
+    );
+
+    return "ContractEvent";
+  }
+}
+
+function readEventTopics(event) {
+  try {
+    return event.topic.map((topic) =>
+      scValToNative(topic)
+    );
+  } catch (error) {
+    console.warn(
+      "Could not decode event topics:",
+      error
+    );
+
+    return [];
+  }
+}
+
+function readEventValue(event) {
+  try {
+    return scValToNative(
+      event.value
+    );
+  } catch (error) {
+    console.warn(
+      "Could not decode event value:",
+      error
+    );
+
+    return null;
+  }
+}
+
 export async function getRecentContractEvents() {
   if (CONTRACT_IDS.length === 0) {
     return [];
@@ -30,28 +85,59 @@ export async function getRecentContractEvents() {
     latestLedger.sequence - 2000
   );
 
-  const response = await server.getEvents({
-    startLedger,
+  const response =
+    await server.getEvents({
+      startLedger,
 
-    filters: [
-      {
-        type: "contract",
-        contractIds: CONTRACT_IDS,
-      },
-    ],
+      filters: [
+        {
+          type: "contract",
+          contractIds:
+            CONTRACT_IDS,
+        },
+      ],
 
-    limit: 50,
-  });
+      limit: 50,
+    });
 
   return response.events
-    .map((event) => ({
-      id: event.id,
-      contractId: event.contractId,
-      ledger: event.ledger,
-      txHash: event.txHash,
-      topic: event.topic,
-      value: event.value,
-    }))
+    .map((event) => {
+      const decodedTopics =
+        readEventTopics(event);
+
+      return {
+        id: event.id,
+
+        name:
+          readEventName(event),
+
+        contractId:
+          event.contractId,
+
+        ledger:
+          event.ledger,
+
+        ledgerClosedAt:
+          event.ledgerClosedAt,
+
+        txHash:
+          event.txHash,
+
+        topic:
+          event.topic,
+
+        decodedTopics,
+
+        value:
+          event.value,
+
+        decodedValue:
+          readEventValue(event),
+
+        successful:
+          event.inSuccessfulContractCall,
+      };
+    })
     .reverse();
 }
 
@@ -62,7 +148,9 @@ export function startEventPolling({
 }) {
   let stopped = false;
   let timer = null;
-  let previousEventIds = new Set();
+
+  let previousEventIds =
+    new Set();
 
   const poll = async () => {
     try {
@@ -73,18 +161,25 @@ export function startEventPolling({
         return;
       }
 
-      const newEvents = events.filter(
-        (event) =>
-          !previousEventIds.has(event.id)
-      );
+      const newEvents =
+        events.filter(
+          (event) =>
+            !previousEventIds.has(
+              event.id
+            )
+        );
 
-      previousEventIds = new Set(
-        events.map((event) => event.id)
-      );
+      previousEventIds =
+        new Set(
+          events.map(
+            (event) => event.id
+          )
+        );
 
-      if (newEvents.length > 0) {
-        onEvents?.(events, newEvents);
-      }
+      onEvents?.(
+        events,
+        newEvents
+      );
     } catch (error) {
       console.error(
         "Contract event polling failed:",
@@ -94,10 +189,11 @@ export function startEventPolling({
       onError?.(error);
     } finally {
       if (!stopped) {
-        timer = window.setTimeout(
-          poll,
-          interval
-        );
+        timer =
+          window.setTimeout(
+            poll,
+            interval
+          );
       }
     }
   };
@@ -108,7 +204,9 @@ export function startEventPolling({
     stopped = true;
 
     if (timer) {
-      window.clearTimeout(timer);
+      window.clearTimeout(
+        timer
+      );
     }
   };
 }

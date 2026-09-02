@@ -339,23 +339,81 @@ function App() {
       }`;
     }
 
+    switch (event.name) {
+      case "TaskCreated":
+        return "Task Created";
+
+      case "TaskCompleted":
+        return "Task Completed";
+
+      case "ReputationUpdated":
+        return "Reputation Updated";
+
+      default:
+        return (
+          event.name ||
+          "Contract Event"
+        );
+    }
+  };
+
+  const getEventDescription = (
+    event
+  ) => {
+    if (!event) {
+      return "";
+    }
+
+    const topics =
+      event.decodedTopics || [];
+
     if (
-      event.contractId ===
-      import.meta.env
-        .VITE_REPUTATION_CONTRACT_ID
+      event.name ===
+      "TaskCreated"
     ) {
-      return "Reputation Contract Event";
+      const taskId =
+        topics[1];
+
+      return `Task #${taskId} created`;
     }
 
     if (
-      event.contractId ===
-      import.meta.env
-        .VITE_TASK_CONTRACT_ID
+      event.name ===
+      "TaskCompleted"
     ) {
-      return "Task Contract Event";
+      const taskId =
+        topics[1];
+
+      return `Task #${taskId} completed`;
     }
 
-    return "Contract Event";
+    if (
+      event.name ===
+      "ReputationUpdated"
+    ) {
+      const value =
+        event.decodedValue;
+
+      if (
+        value &&
+        typeof value === "object"
+      ) {
+        const score =
+          value.new_score ??
+          value.newScore ??
+          value.score;
+
+        if (
+          score !== undefined
+        ) {
+          return `Reputation updated to ${score}`;
+        }
+      }
+
+      return "Reputation score updated";
+    }
+
+    return `Ledger ${event.ledger}`;
   };
 
   return (
@@ -368,6 +426,7 @@ function App() {
 
           <div>
             <h1>Stellar TaskHub</h1>
+
             <p>
               On-chain task &
               reputation system
@@ -695,6 +754,12 @@ function App() {
                         </strong>
 
                         <p>
+                          {getEventDescription(
+                            contractEvent
+                          )}
+                        </p>
+
+                        <p>
                           Ledger{" "}
                           {
                             contractEvent.ledger
@@ -727,6 +792,7 @@ function App() {
               <strong>
                 React Frontend
               </strong>
+
               <span>
                 Wallet + Stellar SDK
               </span>
@@ -740,6 +806,7 @@ function App() {
               <strong>
                 Task Contract
               </strong>
+
               <span>
                 Create & complete
                 tasks
@@ -754,6 +821,7 @@ function App() {
               <strong>
                 Reputation Contract
               </strong>
+
               <span>
                 On-chain reputation
               </span>
