@@ -1,3 +1,119 @@
 html {
   background: #07111f;
 }
+
+/* MOBILE OVERFLOW FIX */
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell,
+.topbar,
+.brand,
+.brand > div,
+.wallet-area,
+.dashboard,
+.hero-section,
+.hero-section > div,
+.tasks-section,
+.activity-section,
+.architecture-section,
+.task-grid,
+.task-card,
+.activity-item,
+.architecture-box {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.brand > div {
+  overflow: hidden;
+}
+
+.brand h1,
+.brand p,
+.hero-section h2,
+.hero-copy,
+.task-card h4,
+.activity-item p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    width: 100%;
+  }
+
+  .brand {
+    width: 100%;
+  }
+
+  .brand > div {
+    flex: 1;
+  }
+
+  .brand h1 {
+    font-size: 20px;
+  }
+
+  .brand p {
+    white-space: normal;
+  }
+
+  .wallet-area {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    width: 100%;
+  }
+
+  .network-pill,
+  .wallet-button {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .hero-section {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-section h2 {
+    max-width: 100%;
+    font-size: 42px;
+    line-height: 1;
+    word-break: normal;
+  }
+
+  .eyebrow {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 450px) {
+  .app-shell {
+    width: calc(100% - 16px);
+  }
+
+  .wallet-area {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-section h2 {
+    font-size: 38px;
+  }
+
+  .hero-section,
+  .tasks-section,
+  .activity-section,
+  .architecture-section {
+    width: 100%;
+    padding: 18px;
+  }
+}
