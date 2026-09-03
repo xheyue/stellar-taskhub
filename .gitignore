@@ -1,0 +1,10 @@
+# Rust's output directory
+target
+
+# Local settings
+.soroban
+.stellar
+
+# Frontend environment files
+frontend/.env
+frontend/.env.local
