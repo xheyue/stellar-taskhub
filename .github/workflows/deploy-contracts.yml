@@ -31,37 +31,37 @@ jobs:
           cargo test -p reputation-contract
           cargo test -p task-contract
 
-      - name: Configure deployer identity
+      - name: Deploy Reputation Contract
+        id: reputation
         env:
           STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
         run: |
-          stellar keys add deployer --secret-key "$STELLAR_SECRET_KEY"
-
-      - name: Deploy Reputation Contract
-        id: reputation
-        run: |
           CONTRACT_ID=$(stellar contract deploy \
             --wasm target/wasm32v1-none/release/reputation_contract.wasm \
-            --source deployer \
+            --source "$STELLAR_SECRET_KEY" \
             --network testnet)
           echo "contract_id=$CONTRACT_ID" >> "$GITHUB_OUTPUT"
           echo "Reputation Contract: $CONTRACT_ID"
 
       - name: Deploy Task Contract
         id: task
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
         run: |
           CONTRACT_ID=$(stellar contract deploy \
             --wasm target/wasm32v1-none/release/task_contract.wasm \
-            --source deployer \
+            --source "$STELLAR_SECRET_KEY" \
             --network testnet)
           echo "contract_id=$CONTRACT_ID" >> "$GITHUB_OUTPUT"
           echo "Task Contract: $CONTRACT_ID"
 
       - name: Initialize Task Contract
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
         run: |
           stellar contract invoke \
             --id "${{ steps.task.outputs.contract_id }}" \
-            --source deployer \
+            --source "$STELLAR_SECRET_KEY" \
             --network testnet \
             -- initialize \
             --reputation_contract "${{ steps.reputation.outputs.contract_id }}"
