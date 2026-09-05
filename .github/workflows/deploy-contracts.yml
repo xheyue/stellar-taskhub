@@ -1,0 +1,74 @@
+name: Deploy Stellar Contracts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-contracts:
+    name: Build and Deploy Soroban Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Install Stellar CLI
+        uses: stellar/stellar-cli@v27.1.0
+
+      - name: Build contracts
+        run: stellar contract build
+
+      - name: Run contract tests
+        run: |
+          cargo test -p reputation-contract
+          cargo test -p task-contract
+
+      - name: Configure deployer identity
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
+        run: |
+          stellar keys add deployer --secret-key "$STELLAR_SECRET_KEY"
+
+      - name: Deploy Reputation Contract
+        id: reputation
+        run: |
+          CONTRACT_ID=$(stellar contract deploy \
+            --wasm target/wasm32v1-none/release/reputation_contract.wasm \
+            --source deployer \
+            --network testnet)
+          echo "contract_id=$CONTRACT_ID" >> "$GITHUB_OUTPUT"
+          echo "Reputation Contract: $CONTRACT_ID"
+
+      - name: Deploy Task Contract
+        id: task
+        run: |
+          CONTRACT_ID=$(stellar contract deploy \
+            --wasm target/wasm32v1-none/release/task_contract.wasm \
+            --source deployer \
+            --network testnet)
+          echo "contract_id=$CONTRACT_ID" >> "$GITHUB_OUTPUT"
+          echo "Task Contract: $CONTRACT_ID"
+
+      - name: Initialize Task Contract
+        run: |
+          stellar contract invoke \
+            --id "${{ steps.task.outputs.contract_id }}" \
+            --source deployer \
+            --network testnet \
+            -- initialize \
+            --reputation_contract "${{ steps.reputation.outputs.contract_id }}"
+
+      - name: Deployment summary
+        run: |
+          echo "## Stellar Testnet Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Reputation Contract:** \`${{ steps.reputation.outputs.contract_id }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Task Contract:** \`${{ steps.task.outputs.contract_id }}\`" >> "$GITHUB_STEP_SUMMARY"
