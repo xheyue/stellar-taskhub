@@ -480,7 +480,8 @@ A short demonstration can follow this sequence:
 Demo video link:
 
 ```text
-TO BE ADDED
+- [Demo Video 1](https://youtu.be/gkzIAAP87d4)
+- [Demo Video 2](https://youtu.be/R0z0c5xwNFI)
 ```
 
 ## Level 3 Requirements
