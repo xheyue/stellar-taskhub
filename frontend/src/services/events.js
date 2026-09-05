@@ -3,15 +3,7 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-const RPC_URL =
-  import.meta.env.VITE_STELLAR_RPC_URL ||
-  "https://soroban-testnet.stellar.org";
-
-const TASK_CONTRACT_ID =
-  import.meta.env.VITE_TASK_CONTRACT_ID;
-
-const REPUTATION_CONTRACT_ID =
-  import.meta.env.VITE_REPUTATION_CONTRACT_ID;
+import { TASK_CONTRACT_ID, REPUTATION_CONTRACT_ID, RPC_URL } from "./contracts";
 
 const server = new rpc.Server(RPC_URL);
 
