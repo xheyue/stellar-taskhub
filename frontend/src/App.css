@@ -918,3 +918,109 @@ footer {
     flex-direction: column;
   }
 }
+
+/* MOBILE OVERFLOW SAFETY */
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.app-shell,
+.dashboard,
+.topbar,
+.brand,
+.wallet-area,
+.hero-section,
+.tasks-section,
+.activity-section,
+.architecture-section,
+.section-heading,
+.new-task-form,
+.task-grid,
+.task-card,
+.activity-list,
+.activity-item,
+.architecture-flow,
+.architecture-box,
+footer {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+.hero-section h2,
+.hero-copy,
+.brand h1,
+.brand p,
+.section-heading h3,
+.architecture-section h3,
+.task-card h4,
+.activity-item p,
+.activity-item strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .topbar,
+  .wallet-area,
+  .hero-section,
+  .tasks-section,
+  .activity-section,
+  .architecture-section {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .wallet-area {
+    flex-wrap: wrap;
+  }
+
+  .wallet-button {
+    min-width: 0;
+  }
+
+  .hero-section {
+    overflow: hidden;
+  }
+
+  .hero-section h2 {
+    max-width: 100%;
+    font-size: clamp(34px, 11vw, 46px);
+    line-height: 1;
+  }
+
+  .task-grid,
+  .architecture-flow {
+    width: 100%;
+  }
+
+  .task-card,
+  .architecture-box {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .new-task-form input,
+  .new-task-form button,
+  .primary-button,
+  .complete-button {
+    max-width: 100%;
+  }
+}
